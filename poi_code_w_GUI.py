@@ -9,6 +9,34 @@ import time
 
 """
 now recode with GUI. Layout:
+
+gui contains fields to set:
+
+time:
+number of timesteps = resolution
+play speed
+
+geometry:
+pattern: (A,w,phi) for (poi,hand,along y center) # , shoulder) (implementing shoulder means, that hand position has to be recalc)
+- pattern is a table
+shoulder width
+string length
+arm length
+
+visualization
+colors
+show flags (left, right, traces)
+checkboxes
+
+trace slider
+
+communication:
+on init, default pattern
+
+on change of anything (patten, color, show flags)
+call update
+
+
 """
 #==============================================================================
 # Main GUI
@@ -17,61 +45,55 @@ class MainWindow(QtGui.QMainWindow):
     
     def __init__(self):
         super(MainWindow, self).__init__()
-        self.w = gl.GLViewWidget()
-        self.w.opts['distance'] = 6
+        
+        ### default constants
+        self.shoulder_width = 0.4
+        self.string_length = 1
+        self.arm_length = 1.2
+        
+        self.colors = {}
+        self.colors['l'] = {'poi':          (0.2,0.9,0.5,0.9),
+                            'string':       (0.2,0.9,0.5,0.9),
+                            'hand':         (0.2,0.9,0.5,0.9),
+                            'arm':          (0.2,0.9,0.5,0.9),
+                            'poi_trace':    (0.2,0.9,0.5,0.9),
+                            'hand_trace':   (0.2,0.9,0.5,0.9),
+                            'frac_trace':   (0.2,0.9,0.5,0.9)}
+                            
+        self.colors['r'] = {'poi':          (1.0,0.2,0.5,0.9),
+                            'string':       (1.0,0.2,0.5,0.9),
+                            'hand':         (1.0,0.2,0.5,0.9),
+                            'arm':          (1.0,0.2,0.5,0.9),
+                            'poi_trace':    (1.0,0.2,0.5,0.9),
+                            'hand_trace':   (1.0,0.2,0.5,0.9),
+                            'frac_trace':   (1.0,0.2,0.5,0.9)}
 
-
-        ### time
-        tsteps = 100
-        self.tvec = sp.linspace(0,2*sp.pi,tsteps)
-        self.t = self.tvec[0]
+        self.init_timing()
+        self.init_pattern()
+        self.init_UI()
+                
+    def init_pattern(self,Pattern=None):
+        # receives pattern from UI, calculates the new position matrix
+        """ a pattern is defined as
+        (A,w,phi)
         
-        self.QtTimer = QtCore.QTimer()
-        self.QtTimer.timeout.connect(self.loop)
+        for three (four) tuples
         
+        (poi, hand, along y center) (and shoulder) """
         
-        ### constants
-        shoulder_width = 0.4
-        string_length = 1
-        arm_length = 1.2
+        if not(Pattern):
+            # ini with default pattern: antispin 4 petal flower
+            pattern_left  = sp.array([[ self.string_length,-3, 0], [ self.arm_length,-1, 0], [ 0, 1, 0]])
+            pattern_right = sp.array([[ self.string_length,-3, 0], [ self.arm_length, 1, 0], [ 0, 1, 0]])
+            Pattern = sp.concatenate((pattern_left[:,:,sp.newaxis],pattern_right[:,:,sp.newaxis]),axis=2)
         
-        # offset to ground level plane, but center of view rotation doesn't change
-        # so it kind of sucks ... either find a way to move grid, or to reposition
-        # center of view
-#        offset = 0
-#        offset_mat = sp.repeat([[0,0,offset]],self.tvec.shape[0],0)
-        
-        """ a pattern is defined in the following: (A,w,phi) for three tuples, each 
-        containing the tuple for the oscillation of (poi, hand, along y center) 
-        
+        """
         variable naming definitions: full array that holds all position coordinates is 
         called Pos
         poi_p denotes poi position in it's own coordinate space (0,0,0) is the pos of the
         hand
         poi denotes the total poi position (poi + hand)
         """
-        
-        # 4 petal and isolation
-        #pattern_left = sp.array([[1,1,0],[0.5,1,sp.pi],[0,0,0]])
-        #pattern_right = sp.array([[1,3,-sp.pi],[1,-1,0],[0.5,1,0]])
-        
-        ## something else weird - same spin 4 petal flower
-        #pattern_left = sp.array([[1,3,0],[1,-1,0],[0,1,0]])
-        #pattern_right = sp.array([[1,3,0],[1,-1,-sp.pi],[0,1,0]])
-        
-        ## something else pretty nice
-#        pattern_left  = sp.array([[ 1,-3, 0], [ 1,-1, 0], [ 0, 1, 0]])
-#        pattern_right = sp.array([[ 1, 3, 0], [ 1, 1, 0], [ 0, 1, 0]])
-        
-        ## something weird - same spin with arms physically impossible though
-        #pattern_left  = sp.array([[ 1, 3, 0], [ 1,-1, 0], [ 0, 1, 0]])
-        #pattern_right = sp.array([[ 1,-3, 0], [ 1,-1, 0], [ 0, 1, 0]])
-        
-        ## classic antispin flower
-        pattern_left  = sp.array([[ string_length, 3, 0], [ arm_length,-1, 0], [ 0, 1, 0]])
-        pattern_right = sp.array([[ string_length,-3, 0], [ arm_length, 1, 0], [ 0, 1, 0]])
-        
-        Pattern = sp.concatenate((pattern_left[:,:,sp.newaxis],pattern_right[:,:,sp.newaxis]),axis=2)
         
         """ definitino of multidim pos array 
         dims are: t,x y z,pp p h s, r l
@@ -83,8 +105,7 @@ class MainWindow(QtGui.QMainWindow):
         s : pos of shoulder
         r l : right, left
         """
-        
-        Pos = sp.zeros((tsteps,3,4,2))
+        Pos = sp.zeros((self.tSteps,3,4,2))
         
         Pos[:,0,[0,2,3],:] = Pattern[:,0,:] * sp.sin(Pattern[:,1,:] * self.tvec[:,sp.newaxis,sp.newaxis] + Pattern[:,2,:])
         Pos[:,2,[0,2,3],:] = Pattern[:,0,:] * sp.cos(Pattern[:,1,:] * self.tvec[:,sp.newaxis,sp.newaxis] + Pattern[:,2,:])
@@ -93,98 +114,96 @@ class MainWindow(QtGui.QMainWindow):
         Pos[:,:,1,:] = Pos[:,:,0,:] + Pos[:,:,2,:] # adding poi position
         
         # adding shoulder width
-        Pos[:,1,:,0] -= shoulder_width/2
-        Pos[:,1,:,1] += shoulder_width/2
+        Pos[:,1,:,0] -= self.shoulder_width/2
+        Pos[:,1,:,1] += self.shoulder_width/2
         
+        self.Pos = Pos
+    
+    def init_timing(self,tSteps=100):
+        """ sets up the QtTimer and time vector. Maybe have a separate function
+        that is called when time steps change"""
+        self.tSteps = tSteps
+        self.tvec = sp.linspace(0,2*sp.pi,self.tSteps)
+        self.t = self.tvec[0]
         
+        self.QtTimer = QtCore.QTimer()
+        self.QtTimer.timeout.connect(self.loop)
+    
         
+    def init_UI(self):
+        """ initializes UI"""        
         
-        #==============================================================================
-        # visualization setup
-        #==============================================================================
-        """ actually these subclasses are not really needed ... """
+        ### Setting up Graphical Display Widget
+        self.Display = gl.GLViewWidget()
+        self.Display.opts['distance'] = 6
         
-        
-                
-        """ also cool idea to implement: a slider that sets the trace position from a 
-        fraction of the string length """
-        
-        
-        """ rename variables:
-        poi, hand, trace, line"""
-        ### colors
-        poi_left_col = (0.2,1,0.5,0.9) # replace by color from qt based color picking widget
-        hand_left_col = (0.2,0.5,1,0.9)
-        
-        hand_right_col = (1,0.5,0.2,0.9)
-        poi_right_col = (1,0.2,0.5,0.9)
-        
-        
-        ### taking the pos back out of the array, just for checking, will be replaced alter
-        poi_left_pos = Pos[:,:,1,1]
-        hand_left_pos = Pos[:,:,2,1]
-        
-        poi_right_pos = Pos[:,:,1,0]
-        hand_right_pos = Pos[:,:,2,0]
-        
-        
-        #### moveable
+        ### moveable
         ### pois
-        poi_right = myGLScatter(PosMat = Pos[:,:,1,0], pos=Pos[0,:,1,0][sp.newaxis,:], color=poi_right_col,size=0.2,pxMode=False)
-        poi_left =  myGLScatter(PosMat = Pos[:,:,1,1], pos=Pos[0,:,1,1][sp.newaxis,:], color=poi_left_col,size=0.2,pxMode=False)
+        poi_right = myGLScatter(PosMat = self.Pos[:,:,1,0], pos=self.Pos[0,:,1,0][sp.newaxis,:], color=self.colors['r']['poi'],size=0.2,pxMode=False)
+        poi_left =  myGLScatter(PosMat = self.Pos[:,:,1,1], pos=self.Pos[0,:,1,1][sp.newaxis,:], color=self.colors['l']['poi'],size=0.2,pxMode=False)
         
         ### strings
-        poi_left_string_data =  sp.concatenate((Pos[:,:,1,1,sp.newaxis],Pos[:,:,2,1,sp.newaxis]),axis=2)
-        poi_right_string_data = sp.concatenate((Pos[:,:,1,0,sp.newaxis],Pos[:,:,2,0,sp.newaxis]),axis=2)
+        poi_right_string_data = sp.concatenate((self.Pos[:,:,1,0,sp.newaxis],self.Pos[:,:,2,0,sp.newaxis]),axis=2)
+        poi_left_string_data =  sp.concatenate((self.Pos[:,:,1,1,sp.newaxis],self.Pos[:,:,2,1,sp.newaxis]),axis=2)
         
-        poi_left_string  = myGLLine(PosMat = poi_left_string_data, pos=poi_left_string_data[1].T,color=poi_left_col)
-        poi_right_string = myGLLine(PosMat = poi_right_string_data,pos=poi_right_string_data[0].T,color=poi_right_col)
+        poi_right_string = myGLLine(PosMat = poi_right_string_data,pos=poi_right_string_data[0].T,color=self.colors['r']['string'])
+        poi_left_string  = myGLLine(PosMat = poi_left_string_data, pos=poi_left_string_data[1].T,color=self.colors['l']['string'])
         
         ### hands
-        hand_right = myGLScatter(PosMat = Pos[:,:,2,0], pos=Pos[0,:,2,0][sp.newaxis,:], color=poi_right_col,size=0.1,pxMode=False)
-        hand_left =  myGLScatter(PosMat = Pos[:,:,2,1], pos=Pos[0,:,2,1][sp.newaxis,:], color=poi_left_col,size=0.1,pxMode=False)
+        hand_right = myGLScatter(PosMat = self.Pos[:,:,2,0], pos=self.Pos[0,:,2,0][sp.newaxis,:], color=self.colors['r']['hand'],size=0.1,pxMode=False)
+        hand_left =  myGLScatter(PosMat = self.Pos[:,:,2,1], pos=self.Pos[0,:,2,1][sp.newaxis,:], color=self.colors['l']['hand'],size=0.1,pxMode=False)
         
         ### arms
-        arm_left_data =  sp.concatenate((Pos[:,:,2,1,sp.newaxis],Pos[:,:,3,1,sp.newaxis]),axis=2)
-        arm_right_data = sp.concatenate((Pos[:,:,2,0,sp.newaxis],Pos[:,:,3,0,sp.newaxis]),axis=2)
+        arm_left_data =  sp.concatenate((self.Pos[:,:,2,1,sp.newaxis],self.Pos[:,:,3,1,sp.newaxis]),axis=2)
+        arm_right_data = sp.concatenate((self.Pos[:,:,2,0,sp.newaxis],self.Pos[:,:,3,0,sp.newaxis]),axis=2)
         
-        arm_left  = myGLLine(PosMat = arm_left_data, pos=arm_left_data[1].T,color=poi_left_col,width=2)
-        arm_right = myGLLine(PosMat = arm_right_data,pos=arm_right_data[0].T,color=poi_right_col,width=2)
+        arm_left  = myGLLine(PosMat = arm_left_data, pos=arm_left_data[1].T,color=self.colors['l']['arm'],width=2)
+        arm_right = myGLLine(PosMat = arm_right_data,pos=arm_right_data[0].T,color=self.colors['r']['arm'],width=2)
         
         self.update_list = [poi_right,poi_left,poi_left_string,poi_right_string,arm_left,arm_right,hand_right,hand_left]
         
-        #### static traces
-        poi_left_trace =  gl.GLLinePlotItem(pos=Pos[:,:,1,1],color=poi_left_col)
-        poi_right_trace = gl.GLLinePlotItem(pos=Pos[:,:,1,0],color=poi_right_col)
+        ### static traces
+        poi_left_trace =  gl.GLLinePlotItem(pos=self.Pos[:,:,1,1],color=self.colors['l']['poi_trace'])
+        poi_right_trace = gl.GLLinePlotItem(pos=self.Pos[:,:,1,0],color=self.colors['r']['poi_trace'])
         
-        hand_left_trace =  gl.GLLinePlotItem(pos=Pos[:,:,2,1],color=poi_left_col)
-        hand_right_trace = gl.GLLinePlotItem(pos=Pos[:,:,2,0],color=poi_right_col)
+        hand_left_trace =  gl.GLLinePlotItem(pos=self.Pos[:,:,2,1],color=self.colors['l']['hand_trace'])
+        hand_right_trace = gl.GLLinePlotItem(pos=self.Pos[:,:,2,0],color=self.colors['r']['hand_trace'])        
         
-        
-        
-        ### adding
         grid = gl.GLGridItem()
-        self.w.addItem(grid)
-        self.w.addItem(poi_left_string)
-        self.w.addItem(poi_right_string)
-        self.w.addItem(poi_left)
-        self.w.addItem(poi_right)
-        self.w.addItem(hand_left)
-        self.w.addItem(hand_right)
-        self.w.addItem(arm_left)
-        self.w.addItem(arm_right)
-        self.w.addItem(poi_left_trace)
-        self.w.addItem(poi_right_trace)
-        self.w.addItem(hand_left_trace)
-        self.w.addItem(hand_right_trace)        
+        self.Display.addItem(grid)
+        self.Display.addItem(poi_left_string)
+        self.Display.addItem(poi_right_string)
+        self.Display.addItem(poi_left)
+        self.Display.addItem(poi_right)
+        self.Display.addItem(hand_left)
+        self.Display.addItem(hand_right)
+        self.Display.addItem(arm_left)
+        self.Display.addItem(arm_right)
+        self.Display.addItem(poi_left_trace)
+        self.Display.addItem(poi_right_trace)
+        self.Display.addItem(hand_left_trace)
+        self.Display.addItem(hand_right_trace)
         
-        self.initUI()
         
-    def initUI(self):      
-        self.setCentralWidget(self.w)
+        ### Setting up Control Panel Widget
+        self.Control = ControlWidget(Main=self)
+        
+        ### Full Window with QSplitter layout
+        self.Splitter = QtGui.QSplitter(QtCore.Qt.Horizontal)
+        self.Splitter.addWidget(self.Display)
+        self.Splitter.addWidget(self.Control)
+        self.setCentralWidget(self.Splitter)
+        
+        # resizing splitter
+        # note: http://stackoverflow.com/questions/16280323/qt-set-size-of-qmainwindow
+        frac = 0.8
+        self.Splitter.setSizes([int(self.Splitter.size().height() * frac), int(self.Splitter.size().height() * (1-frac))])
+        
         self.setGeometry(300, 300, 650, 600)
-        self.setWindowTitle('Poi Visualization')
+        self.setWindowTitle('Poi Visualization')              
         self.show()
+        
+        ### Fixme move this to a seperate function
         self.QtTimer.start(50) # 50 ms = 20 Hz. Not super smooth, maybe check for a better solution
         
     def loop(self):
@@ -197,7 +216,11 @@ class MainWindow(QtGui.QMainWindow):
         for item in self.update_list:
             item.update_(self.t)
         
-        
+    def time_base_change(self):
+        """ called upon tSteps change """
+        pass
+    
+
         
 #==============================================================================
 # subclasses
@@ -220,14 +243,21 @@ class myGLScatter(gl.GLScatterPlotItem):
         gl.GLScatterPlotItem.__init__(self,**kwargs)
         self.side = side
         self.PosMat = PosMat # tvec.shape[0] x 3
-        
-#        self.update_(0)
+
     
     def update_(self,i):
         """ updates position based on i """
         self.setData(pos=self.PosMat[i,:][sp.newaxis,:])
         
+class ControlWidget(QtGui.QWidget):
+    def __init__(self,Main=None,*args,**kwargs):
+        QtGui.QWidget.__init__(self,*args,**kwargs)
+        self.Main = Main
+        
 
+#==============================================================================
+# main
+#==============================================================================
 
 def main():
     app = QtGui.QApplication(sys.argv)
@@ -239,3 +269,22 @@ if __name__ == '__main__':
     main()
 
 
+
+#==============================================================================
+# some leftovers, patterns ...
+#==============================================================================
+        # 4 petal and isolation
+        #pattern_left = sp.array([[1,1,0],[0.5,1,sp.pi],[0,0,0]])
+        #pattern_right = sp.array([[1,3,-sp.pi],[1,-1,0],[0.5,1,0]])
+        
+        ## something else weird - same spin 4 petal flower
+        #pattern_left = sp.array([[1,3,0],[1,-1,0],[0,1,0]])
+        #pattern_right = sp.array([[1,3,0],[1,-1,-sp.pi],[0,1,0]])
+        
+        ## something else pretty nice
+#        pattern_left  = sp.array([[ 1,-3, 0], [ 1,-1, 0], [ 0, 1, 0]])
+#        pattern_right = sp.array([[ 1, 3, 0], [ 1, 1, 0], [ 0, 1, 0]])
+        
+        ## something weird - same spin with arms physically impossible though
+        #pattern_left  = sp.array([[ 1, 3, 0], [ 1,-1, 0], [ 0, 1, 0]])
+        #pattern_right = sp.array([[ 1,-3, 0], [ 1,-1, 0], [ 0, 1, 0]])
