@@ -83,7 +83,7 @@ class MainWindow(QtGui.QMainWindow):
         
         if not(Pattern):
             # ini with default pattern: antispin 4 petal flower
-            pattern_left  = sp.array([[ self.string_length,-3, 0], [ self.arm_length,-1, 0], [ 0, 1, 0]])
+            pattern_left  = sp.array([[ self.string_length, 3, 0], [ self.arm_length,-1, sp.pi], [ 0, 1, 0]])
             pattern_right = sp.array([[ self.string_length,-3, 0], [ self.arm_length, 1, 0], [ 0, 1, 0]])
             Pattern = sp.concatenate((pattern_left[:,:,sp.newaxis],pattern_right[:,:,sp.newaxis]),axis=2)
         
@@ -199,7 +199,7 @@ class MainWindow(QtGui.QMainWindow):
         frac = 0.8
         self.Splitter.setSizes([int(self.Splitter.size().height() * frac), int(self.Splitter.size().height() * (1-frac))])
         
-        self.setGeometry(300, 300, 650, 600)
+        self.setGeometry(200, 200, 850, 600)
         self.setWindowTitle('Poi Visualization')              
         self.show()
         
