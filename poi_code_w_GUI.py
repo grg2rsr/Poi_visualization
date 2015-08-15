@@ -81,7 +81,7 @@ class MainWindow(QtGui.QMainWindow):
         
         (poi, hand, along y center) (and shoulder) """
         
-        if not(Pattern):
+        if Pattern == None:
             # ini with default pattern: antispin 4 petal flower
             pattern_left  = sp.array([[ self.string_length, 3, 0], [ self.arm_length,-1, sp.pi], [ 0, 1, 0]])
             pattern_right = sp.array([[ self.string_length,-3, 0], [ self.arm_length, 1, 0], [ 0, 1, 0]])
@@ -105,6 +105,7 @@ class MainWindow(QtGui.QMainWindow):
         s : pos of shoulder
         r l : right, left
         """
+
         Pos = sp.zeros((self.tSteps,3,4,2))
         
         Pos[:,0,[0,2,3],:] = Pattern[:,0,:] * sp.sin(Pattern[:,1,:] * self.tvec[:,sp.newaxis,sp.newaxis] + Pattern[:,2,:])
@@ -116,7 +117,7 @@ class MainWindow(QtGui.QMainWindow):
         # adding shoulder width
         Pos[:,1,:,0] -= self.shoulder_width/2
         Pos[:,1,:,1] += self.shoulder_width/2
-        
+
         self.Pos = Pos
     
     def init_timing(self,tSteps=100):
@@ -129,6 +130,50 @@ class MainWindow(QtGui.QMainWindow):
         self.QtTimer = QtCore.QTimer()
         self.QtTimer.timeout.connect(self.loop)
     
+    def update_GLitems(self):
+        
+        ### moveable
+        ### pois
+        self.poi_right.PosMat = self.Pos[:,:,1,0]
+        self.poi_right.setData(pos=self.Pos[0,:,1,0][sp.newaxis,:], color=self.colors['r']['poi'],size=0.2,pxMode=False)
+        
+        self.poi_left.PosMat = self.Pos[:,:,1,1]
+        self.poi_left.setData(pos=self.Pos[0,:,1,1][sp.newaxis,:], color=self.colors['l']['poi'],size=0.2,pxMode=False)
+        
+        ### strings
+        self.poi_right_string_data = sp.concatenate((self.Pos[:,:,1,0,sp.newaxis],self.Pos[:,:,2,0,sp.newaxis]),axis=2)
+        self.poi_left_string_data =  sp.concatenate((self.Pos[:,:,1,1,sp.newaxis],self.Pos[:,:,2,1,sp.newaxis]),axis=2)
+        
+        self.poi_right_string.PosMat = self.poi_right_string_data
+        self.poi_right_string.setData(pos=self.poi_right_string_data[0].T,color=self.colors['r']['string'])
+        
+        self.poi_left_string.PosMat = self.poi_left_string_data
+        self.poi_left_string.setData(pos=self.poi_left_string_data[1].T,color=self.colors['l']['string'])
+        
+        ### hands
+        self.hand_right.PosMat = self.Pos[:,:,2,0]
+        self.hand_right.setData(pos=self.Pos[0,:,2,0][sp.newaxis,:], color=self.colors['r']['hand'],size=0.1,pxMode=False)
+        
+        self.hand_left.PosMat = self.Pos[:,:,2,1]
+        self.hand_left.setData(pos=self.Pos[0,:,2,1][sp.newaxis,:], color=self.colors['l']['hand'],size=0.1,pxMode=False)
+        
+        ### arms
+        self.arm_left_data =  sp.concatenate((self.Pos[:,:,2,1,sp.newaxis],self.Pos[:,:,3,1,sp.newaxis]),axis=2)
+        self.arm_right_data = sp.concatenate((self.Pos[:,:,2,0,sp.newaxis],self.Pos[:,:,3,0,sp.newaxis]),axis=2)
+        
+        self.arm_left.PosMat = self.arm_left_data
+        self.arm_left.setData(pos=self.arm_left_data[1].T,color=self.colors['l']['arm'],width=2)
+        
+        self.arm_right .PosMat = self.arm_right_data
+        self.arm_right.setData(pos=self.arm_right_data[0].T,color=self.colors['r']['arm'],width=2)
+        
+        
+        ### static traces
+        self.poi_left_trace.setData(pos=self.Pos[:,:,1,1],color=self.colors['l']['poi_trace'])
+        self.poi_right_trace.setData(pos=self.Pos[:,:,1,0],color=self.colors['r']['poi_trace'])
+        
+        self.hand_left_trace.setData(pos=self.Pos[:,:,2,1],color=self.colors['l']['hand_trace'])
+        self.hand_right_trace.setData(pos=self.Pos[:,:,2,0],color=self.colors['r']['hand_trace']) 
         
     def init_UI(self):
         """ initializes UI"""        
@@ -137,52 +182,42 @@ class MainWindow(QtGui.QMainWindow):
         self.Display = gl.GLViewWidget()
         self.Display.opts['distance'] = 6
         
-        ### moveable
-        ### pois
-        poi_right = myGLScatter(PosMat = self.Pos[:,:,1,0], pos=self.Pos[0,:,1,0][sp.newaxis,:], color=self.colors['r']['poi'],size=0.2,pxMode=False)
-        poi_left =  myGLScatter(PosMat = self.Pos[:,:,1,1], pos=self.Pos[0,:,1,1][sp.newaxis,:], color=self.colors['l']['poi'],size=0.2,pxMode=False)
+        self.poi_right = myGLScatter()
+        self.poi_left =  myGLScatter()
         
-        ### strings
-        poi_right_string_data = sp.concatenate((self.Pos[:,:,1,0,sp.newaxis],self.Pos[:,:,2,0,sp.newaxis]),axis=2)
-        poi_left_string_data =  sp.concatenate((self.Pos[:,:,1,1,sp.newaxis],self.Pos[:,:,2,1,sp.newaxis]),axis=2)
+        self.poi_right_string = myGLLine()
+        self.poi_left_string  = myGLLine()
         
-        poi_right_string = myGLLine(PosMat = poi_right_string_data,pos=poi_right_string_data[0].T,color=self.colors['r']['string'])
-        poi_left_string  = myGLLine(PosMat = poi_left_string_data, pos=poi_left_string_data[1].T,color=self.colors['l']['string'])
+        self.hand_right = myGLScatter()
+        self.hand_left =  myGLScatter()
         
-        ### hands
-        hand_right = myGLScatter(PosMat = self.Pos[:,:,2,0], pos=self.Pos[0,:,2,0][sp.newaxis,:], color=self.colors['r']['hand'],size=0.1,pxMode=False)
-        hand_left =  myGLScatter(PosMat = self.Pos[:,:,2,1], pos=self.Pos[0,:,2,1][sp.newaxis,:], color=self.colors['l']['hand'],size=0.1,pxMode=False)
+        self.arm_left  = myGLLine()
+        self.arm_right = myGLLine()
         
-        ### arms
-        arm_left_data =  sp.concatenate((self.Pos[:,:,2,1,sp.newaxis],self.Pos[:,:,3,1,sp.newaxis]),axis=2)
-        arm_right_data = sp.concatenate((self.Pos[:,:,2,0,sp.newaxis],self.Pos[:,:,3,0,sp.newaxis]),axis=2)
+        self.poi_right_trace = gl.GLLinePlotItem()
+        self.poi_left_trace =  gl.GLLinePlotItem()
         
-        arm_left  = myGLLine(PosMat = arm_left_data, pos=arm_left_data[1].T,color=self.colors['l']['arm'],width=2)
-        arm_right = myGLLine(PosMat = arm_right_data,pos=arm_right_data[0].T,color=self.colors['r']['arm'],width=2)
+        self.hand_left_trace =  gl.GLLinePlotItem()
+        self.hand_right_trace = gl.GLLinePlotItem()
         
-        self.update_list = [poi_right,poi_left,poi_left_string,poi_right_string,arm_left,arm_right,hand_right,hand_left]
-        
-        ### static traces
-        poi_left_trace =  gl.GLLinePlotItem(pos=self.Pos[:,:,1,1],color=self.colors['l']['poi_trace'])
-        poi_right_trace = gl.GLLinePlotItem(pos=self.Pos[:,:,1,0],color=self.colors['r']['poi_trace'])
-        
-        hand_left_trace =  gl.GLLinePlotItem(pos=self.Pos[:,:,2,1],color=self.colors['l']['hand_trace'])
-        hand_right_trace = gl.GLLinePlotItem(pos=self.Pos[:,:,2,0],color=self.colors['r']['hand_trace'])        
+        self.update_list = [self.poi_right,self.poi_left,self.poi_left_string,self.poi_right_string,self.arm_left,self.arm_right,self.hand_right,self.hand_left]
+
+        self.update_GLitems()
         
         grid = gl.GLGridItem()
         self.Display.addItem(grid)
-        self.Display.addItem(poi_left_string)
-        self.Display.addItem(poi_right_string)
-        self.Display.addItem(poi_left)
-        self.Display.addItem(poi_right)
-        self.Display.addItem(hand_left)
-        self.Display.addItem(hand_right)
-        self.Display.addItem(arm_left)
-        self.Display.addItem(arm_right)
-        self.Display.addItem(poi_left_trace)
-        self.Display.addItem(poi_right_trace)
-        self.Display.addItem(hand_left_trace)
-        self.Display.addItem(hand_right_trace)
+        self.Display.addItem(self.poi_left_string)
+        self.Display.addItem(self.poi_right_string)
+        self.Display.addItem(self.poi_left)
+        self.Display.addItem(self.poi_right)
+        self.Display.addItem(self.hand_left)
+        self.Display.addItem(self.hand_right)
+        self.Display.addItem(self.arm_left)
+        self.Display.addItem(self.arm_right)
+        self.Display.addItem(self.poi_left_trace)
+        self.Display.addItem(self.poi_right_trace)
+        self.Display.addItem(self.hand_left_trace)
+        self.Display.addItem(self.hand_right_trace)
         
         
         ### Setting up Control Panel Widget
@@ -250,10 +285,59 @@ class myGLScatter(gl.GLScatterPlotItem):
         self.setData(pos=self.PosMat[i,:][sp.newaxis,:])
         
 class ControlWidget(QtGui.QWidget):
+
+#    geometry:
+#pattern: (A,w,phi) for (poi,hand,along y center) # , shoulder) (implementing shoulder means, that hand position has to be recalc)
+#- pattern is a table
+#shoulder width
+#string length
+#arm length
+#
+#visualization
+#colors
+#show flags (left, right, traces)
+#checkboxes
+
     def __init__(self,Main=None,*args,**kwargs):
         QtGui.QWidget.__init__(self,*args,**kwargs)
-        self.Main = Main
         
+        self.Main = Main
+        self.col = (0,0,0,0)
+        self.initUI()
+        
+    def initUI(self):
+        self.layout = QtGui.QVBoxLayout()
+        self.SpinBox = QtGui.QDoubleSpinBox(self)
+        self.SpinBox.valueChanged.connect(self.SpinBoxTmp)
+        self.btn = QtGui.QPushButton('color selector widget', self)
+        self.btn.clicked.connect(self.getColor)
+
+#        tab_widget = QtGui.QWidget(self)
+#        self.addTab(tab_widget,tab_label)
+#        FormLayout = QtGui.QFormLayout(tab_widget)
+#        FormLayout.setVerticalSpacing(10)
+#        FormLayout.setLabelAlignment(QtCore.Qt.AlignRight)
+#        tab_widget.setLayout(FormLayout)
+
+        self.layout.addWidget(self.SpinBox)
+        self.layout.addWidget(self.btn)
+        self.setLayout(self.layout)
+        self.show()
+        
+    def SpinBoxTmp(self,value):
+        print value
+        pattern_left  = sp.array([[ self.Main.string_length, value, 0], [ self.Main.arm_length,-1, sp.pi], [ 0, 1, 0]])
+        pattern_right = sp.array([[ self.Main.string_length,-3, 0], [ self.Main.arm_length, 1, 0], [ 0, 1, 0]])
+        Pattern = sp.concatenate((pattern_left[:,:,sp.newaxis],pattern_right[:,:,sp.newaxis]),axis=2)
+        
+        self.Main.init_pattern(Pattern)
+        self.Main.update_GLitems()
+        
+        
+    def getColor(self):
+      
+        col = QtGui.QColorDialog.getColor()
+        self.col = col
 
 #==============================================================================
 # main
