@@ -83,9 +83,9 @@ class MainWindow(QtGui.QMainWindow):
         
         if Pattern == None:
             # ini with default pattern: antispin 4 petal flower
-            pattern_left  = sp.array([[ self.string_length, 3, 0], [ self.arm_length,-1, sp.pi], [ 0, 1, 0]])
+            pattern_left  = sp.array([[ self.string_length, 3, 0], [ self.arm_length,-1, 0], [ 0, 1, 0]])
             pattern_right = sp.array([[ self.string_length,-3, 0], [ self.arm_length, 1, 0], [ 0, 1, 0]])
-            Pattern = sp.concatenate((pattern_left[:,:,sp.newaxis],pattern_right[:,:,sp.newaxis]),axis=2)
+            Pattern = sp.concatenate((pattern_right[:,:,sp.newaxis],pattern_left[:,:,sp.newaxis]),axis=2)
         
         """
         variable naming definitions: full array that holds all position coordinates is 
@@ -118,6 +118,7 @@ class MainWindow(QtGui.QMainWindow):
         Pos[:,1,:,0] -= self.shoulder_width/2
         Pos[:,1,:,1] += self.shoulder_width/2
 
+        self.Pattern = Pattern
         self.Pos = Pos
     
     def init_timing(self,tSteps=100):
@@ -306,29 +307,57 @@ class ControlWidget(QtGui.QWidget):
         self.initUI()
         
     def initUI(self):
-        self.layout = QtGui.QVBoxLayout()
-        self.SpinBox = QtGui.QDoubleSpinBox(self)
-        self.SpinBox.valueChanged.connect(self.SpinBoxTmp)
-        self.btn = QtGui.QPushButton('color selector widget', self)
-        self.btn.clicked.connect(self.getColor)
+        self.layout = QtGui.QGridLayout()
+        
+        # top row labels
+        self.layout.addWidget(QtGui.QLabel('left'),0,1)
+        self.layout.addWidget(QtGui.QLabel('right'),0,2)
 
-#        tab_widget = QtGui.QWidget(self)
-#        self.addTab(tab_widget,tab_label)
-#        FormLayout = QtGui.QFormLayout(tab_widget)
-#        FormLayout.setVerticalSpacing(10)
-#        FormLayout.setLabelAlignment(QtCore.Qt.AlignRight)
-#        tab_widget.setLayout(FormLayout)
+        # create spinboxes for poi, arm
+        self.Poi_w = [QtGui.QDoubleSpinBox(self),QtGui.QDoubleSpinBox(self)]
+        self.Poi_p = [QtGui.QDoubleSpinBox(self),QtGui.QDoubleSpinBox(self)]
+        
+        self.Hand_w = [QtGui.QDoubleSpinBox(self),QtGui.QDoubleSpinBox(self)]        
+        self.Hand_p = [QtGui.QDoubleSpinBox(self),QtGui.QDoubleSpinBox(self)]        
 
-        self.layout.addWidget(self.SpinBox)
-        self.layout.addWidget(self.btn)
+        # set initial values        
+        # extend range before value set
+        for SpinBox in self.Poi_w + self.Poi_p + self.Hand_w + self.Hand_p:
+            SpinBox.setRange(-100.0,100.0)
+        [self.Poi_w[i].setValue(self.Main.Pattern[0,1,i]) for i in range(2)]
+        [self.Poi_p[i].setValue(self.Main.Pattern[0,2,i]) for i in range(2)]
+        [self.Hand_w[i].setValue(self.Main.Pattern[1,1,i]) for i in range(2)]
+        [self.Hand_p[i].setValue(self.Main.Pattern[1,2,i]) for i in range(2)]
+        
+        # add to layout
+        self.layout.addWidget(QtGui.QLabel('Poi w'),1,0)
+        [self.layout.addWidget(self.Poi_w[i],1,i+1) for i in range(2)]
+        
+        self.layout.addWidget(QtGui.QLabel('Poi phase'),2,0)
+        [self.layout.addWidget(self.Poi_p[i],2,i+1) for i in range(2)]
+
+        self.layout.addWidget(QtGui.QLabel('Arm w'),3,0)
+        [self.layout.addWidget(self.Hand_w[i],3,i+1) for i in range(2)]
+
+        self.layout.addWidget(QtGui.QLabel('Arm phase'),4,0)
+        [self.layout.addWidget(self.Hand_p[i],4,i+1) for i in range(2)]
+
+        # connect        
+        for SpinBox in self.Poi_w + self.Poi_p + self.Hand_w + self.Hand_p:
+            SpinBox.valueChanged.connect(self.pattern_change)
+            
+#        self.btn = QtGui.QPushButton('color selector widget', self)
+#        self.btn.clicked.connect(self.getColor)
+
         self.setLayout(self.layout)
         self.show()
         
-    def SpinBoxTmp(self,value):
-        print value
-        pattern_left  = sp.array([[ self.Main.string_length, value, 0], [ self.Main.arm_length,-1, sp.pi], [ 0, 1, 0]])
-        pattern_right = sp.array([[ self.Main.string_length,-3, 0], [ self.Main.arm_length, 1, 0], [ 0, 1, 0]])
-        Pattern = sp.concatenate((pattern_left[:,:,sp.newaxis],pattern_right[:,:,sp.newaxis]),axis=2)
+    def pattern_change(self,value):
+        
+        pattern_right = sp.array([[ self.Main.string_length, self.Poi_w[0].value(), self.Poi_p[0].value()], [ self.Main.arm_length, self.Hand_w[0].value(), self.Hand_p[0].value()], [ 0, 1, 0]])
+        pattern_left  = sp.array([[ self.Main.string_length, self.Poi_w[1].value(), self.Poi_p[1].value()], [ self.Main.arm_length, self.Hand_w[1].value(), self.Hand_p[1].value()], [ 0, 1, 0]])
+        
+        Pattern = sp.concatenate((pattern_right[:,:,sp.newaxis],pattern_left[:,:,sp.newaxis]),axis=2)
         
         self.Main.init_pattern(Pattern)
         self.Main.update_GLitems()
