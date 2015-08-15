@@ -220,7 +220,6 @@ class MainWindow(QtGui.QMainWindow):
         self.Display.addItem(self.hand_left_trace)
         self.Display.addItem(self.hand_right_trace)
         
-        
         ### Setting up Control Panel Widget
         self.Control = ControlWidget(Main=self)
         
@@ -255,7 +254,6 @@ class MainWindow(QtGui.QMainWindow):
     def time_base_change(self):
         """ called upon tSteps change """
         pass
-    
 
         
 #==============================================================================
@@ -284,20 +282,11 @@ class myGLScatter(gl.GLScatterPlotItem):
     def update_(self,i):
         """ updates position based on i """
         self.setData(pos=self.PosMat[i,:][sp.newaxis,:])
-        
-class ControlWidget(QtGui.QWidget):
 
-#    geometry:
-#pattern: (A,w,phi) for (poi,hand,along y center) # , shoulder) (implementing shoulder means, that hand position has to be recalc)
-#- pattern is a table
-#shoulder width
-#string length
-#arm length
-#
-#visualization
-#colors
-#show flags (left, right, traces)
-#checkboxes
+#==============================================================================
+# Widgets        
+#==============================================================================
+class ControlWidget(QtGui.QWidget):
 
     def __init__(self,Main=None,*args,**kwargs):
         QtGui.QWidget.__init__(self,*args,**kwargs)
@@ -324,6 +313,7 @@ class ControlWidget(QtGui.QWidget):
         # extend range before value set
         for SpinBox in self.Poi_w + self.Poi_p + self.Hand_w + self.Hand_p:
             SpinBox.setRange(-100.0,100.0)
+            
         [self.Poi_w[i].setValue(self.Main.Pattern[0,1,i]) for i in range(2)]
         [self.Poi_p[i].setValue(self.Main.Pattern[0,2,i]) for i in range(2)]
         [self.Hand_w[i].setValue(self.Main.Pattern[1,1,i]) for i in range(2)]
@@ -345,6 +335,9 @@ class ControlWidget(QtGui.QWidget):
         # connect        
         for SpinBox in self.Poi_w + self.Poi_p + self.Hand_w + self.Hand_p:
             SpinBox.valueChanged.connect(self.pattern_change)
+            
+        for SpinBox in self.Poi_p + self.Hand_p:
+            SpinBox.setSingleStep(sp.pi/2)
             
 #        self.btn = QtGui.QPushButton('color selector widget', self)
 #        self.btn.clicked.connect(self.getColor)
